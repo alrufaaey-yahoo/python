@@ -41,6 +41,15 @@ NoDPI - это утилита для обхода системы DPI (Deep Packe
   </p>
 </div>
 
+### System requirements / Системные требования
+The application requires Android 5.0 and above.
+The application also uses permission to send notifications. For the correct operation of the proxy service, it is recommended to disable energy consumption optimization in the application's system settings
+
+<hr/>
+
+Для работы приложения требуется Андроид 5.0 и выше.
+Также приложение использует разрешение на отправку уведомлений. Для корректной работы сервиса прокси рекомендуется отключить оптимизацию энергопотребления в системных настройках приложения
+
 ### Alternatives / Альтернативы
 
 #### Android
