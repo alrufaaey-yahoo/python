@@ -16,7 +16,7 @@ title = NoDPI
 package.name = nodpi
 package.domain = com.gvcoder
 
-services = Proxy:./service.py:foreground:sticky
+services = Proxy:%(source.dir)s/service.py:foreground:sticky
 android.permissions = INTERNET,FOREGROUND_SERVICE,POST_NOTIFICATIONS
 android.accept_sdk_license = True
 
