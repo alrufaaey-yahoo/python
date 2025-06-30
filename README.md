@@ -10,6 +10,9 @@
 
 [![Visitors](https://visitor-badge.laobi.icu/badge?page_id=GVCoder09.NoDPI4Android)]()
 
+> [!IMPORTANT]
+> **Do not confuse with https://github.com/raspabamos/nodpi !**
+
 ## Description / Описание
 NoDPI4Android is a graphical add-on [NoDPI](https://github.com/GVCoder09/NoDPI). This application is designed to run on Android devices only, Windows and Linux version available [here](https://github.com/GVCoder09/NoDPI/releases)
 
