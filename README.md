@@ -108,7 +108,7 @@ Please report any problems and malfunctions to us on [the Issues page](https://g
 
 <hr>
 
-1) [Скачайте](https://github.com/GVCoder09/NoDPI/releases) последнюю версию утилиты и установите ее
+1) [Скачайте](https://github.com/GVCoder09/NoDPI4Android/releases) последнюю версию утилиты и установите ее
 2) Запустите прокси, нажав кнопку **START SERVER** в приложении
 3) В настройках Android настройте прокси на 0.0.0.0:8881
 5) Наслаждайтесь!
