@@ -116,18 +116,30 @@ jobs:
 
     - name: Accept Android SDK licenses
       run: |
+        # Create a licenses directory and accept licenses
+        mkdir -p $HOME/android-sdk/licenses
+        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $HOME/android-sdk/licenses/android-sdk-license
+        echo "84831b9409646a918e30573bab4c9c91346d8abd" > $HOME/android-sdk/licenses/android-sdk-preview-license
+        echo "d975f751698a77b662f1254ddbeed3901e976f5a" > $HOME/android-sdk/licenses/intel-android-extra-license
+        
+        # Also accept via sdkmanager
         yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
     - name: Install Android SDK components
       run: |
         $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
+        
+        # Install essential components only (patcher;v4 removed)
         $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
           "platform-tools" \
           "platforms;${{ env.ANDROID_PLATFORM }}" \
           "build-tools;${{ env.ANDROID_BUILD_TOOLS }}" \
           "ndk;25.2.9519653" \
-          "cmake;3.22.1" \
-          "patcher;v4"
+          "cmake;3.22.1"
+        
+        # Verify installation
+        echo "Android SDK components installed:"
+        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --list --verbose | grep -E "Installed|installed"
 
     - name: Configure Buildozer
       run: |
@@ -148,8 +160,14 @@ jobs:
         # Configure for debug build
         sed -i "s/^android.release_artifact = .*/android.release_artifact = .apk/" buildozer.spec
         
-        # Set proper requirements
-        echo "requirements = python3,kivy==2.1.0,kivymd==1.1.1,pyjnius==1.4.2,openssl,requests==2.28.2,pillow==9.5.0" >> buildozer.spec
+        # Ensure proper requirements section
+        if grep -q "^requirements = " buildozer.spec; then
+          sed -i "s|^requirements = .*|requirements = python3,kivy==2.1.0,kivymd==1.1.1,pyjnius==1.4.2,openssl,requests==2.28.2,pillow==9.5.0|" buildozer.spec
+        else
+          echo "" >> buildozer.spec
+          echo "# Python dependencies" >> buildozer.spec
+          echo "requirements = python3,kivy==2.1.0,kivymd==1.1.1,pyjnius==1.4.2,openssl,requests==2.28.2,pillow==9.5.0" >> buildozer.spec
+        fi
 
     - name: Cache Buildozer dependencies
       uses: actions/cache@v3
@@ -169,19 +187,27 @@ jobs:
         export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools
         export ANDROID_HOME=$HOME/android-sdk
         export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export ANDROID_NDK_HOME=$HOME/android-sdk/ndk/25.2.9519653
         
         # Clean previous builds
         buildozer android clean || true
         
-        # Build debug APK
-        buildozer -v android debug
+        # Build debug APK with verbose output
+        echo "Starting Buildozer build for ${{ matrix.arch }}..."
+        buildozer -v android debug 2>&1 | tee build.log
         
         # Check if APK was created
         if ls bin/*.apk 1> /dev/null 2>&1; then
-          echo "APK built successfully!"
+          echo "✅ APK built successfully!"
           ls -la bin/
+          
+          # Check APK size
+          APK_FILE=$(ls bin/*.apk | head -1)
+          echo "APK size: $(du -h "$APK_FILE" | cut -f1)"
         else
-          echo "APK build failed!"
+          echo "❌ APK build failed!"
+          echo "Build log tail:"
+          tail -50 build.log
           exit 1
         fi
 
@@ -192,7 +218,7 @@ jobs:
         NEW_NAME="${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-${{ matrix.abi }}-debug.apk"
         
         mv "$APK_FILE" "bin/$NEW_NAME"
-        echo "APK renamed to: $NEW_NAME"
+        echo "✅ APK renamed to: $NEW_NAME"
 
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
@@ -240,6 +266,15 @@ jobs:
           echo "- $(basename "$apk")" >> $UNIVERSAL_DIR/README.md
         done
         
+        echo "" >> $UNIVERSAL_DIR/README.md
+        echo "## Installation Instructions:" >> $UNIVERSAL_DIR/README.md
+        echo "1. Download the APK matching your device architecture:" >> $UNIVERSAL_DIR/README.md
+        echo "   - **arm64-v8a**: Most modern phones (2016+)" >> $UNIVERSAL_DIR/README.md
+        echo "   - **armeabi-v7a**: Older phones" >> $UNIVERSAL_DIR/README.md
+        echo "   - **x86/x86_64**: Emulators and Android TV" >> $UNIVERSAL_DIR/README.md
+        echo "2. Enable 'Install from unknown sources' in Android settings" >> $UNIVERSAL_DIR/README.md
+        echo "3. Install the APK" >> $UNIVERSAL_DIR/README.md
+        
         # Create a zip with all APKs
         cd $UNIVERSAL_DIR
         zip -r ../${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-architectures.zip .
@@ -275,6 +310,24 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
+        body: |
+          # ${{ env.APP_NAME }} v${{ env.VERSION_NAME }}
+          
+          ## 📱 تطبيق هجوم DDOS متقدم
+          
+          ### المميزات:
+          - هجوم HTTP/HTTPS متعدد الخيوط
+          - واجهة مستخدم عربية
+          - دعم جميع معالجات Android
+          - إشعارات في الخلفية
+          
+          ### التعليمات:
+          1. حمل الملف المناسب لمعالج جهازك
+          2. فعّل "التثبيت من مصادر غير معروفة"
+          3. ثبت التطبيق واستمتع
+          
+          ### ⚠️ ملاحظة:
+          للأغراض التعليمية فقط
 
   quality-check:
     runs-on: ubuntu-latest
@@ -292,27 +345,34 @@ jobs:
         APK_FILE=$(find apk-check -name "*.apk" | head -1)
         
         if [ -f "$APK_FILE" ]; then
-          echo "APK file found: $(basename "$APK_FILE")"
-          echo "File size: $(du -h "$APK_FILE" | cut -f1)"
+          echo "✅ APK file found: $(basename "$APK_FILE")"
+          echo "📊 File size: $(du -h "$APK_FILE" | cut -f1)"
           
           # Check APK structure (basic)
           if unzip -l "$APK_FILE" | grep -q "AndroidManifest.xml"; then
-            echo "✓ AndroidManifest.xml found"
+            echo "✅ AndroidManifest.xml found"
           else
-            echo "✗ AndroidManifest.xml missing"
+            echo "❌ AndroidManifest.xml missing"
             exit 1
           fi
           
           if unzip -l "$APK_FILE" | grep -q "classes.dex"; then
-            echo "✓ classes.dex found"
+            echo "✅ classes.dex found"
           else
-            echo "✗ classes.dex missing"
+            echo "❌ classes.dex missing"
             exit 1
           fi
           
-          echo "APK structure check passed!"
+          if unzip -l "$APK_FILE" | grep -q "resources.arsc"; then
+            echo "✅ resources.arsc found"
+          else
+            echo "❌ resources.arsc missing"
+            exit 1
+          fi
+          
+          echo "✅ APK structure check passed!"
         else
-          echo "APK file not found!"
+          echo "❌ APK file not found!"
           exit 1
         fi
 
@@ -320,25 +380,14 @@ jobs:
       run: |
         APK_FILE=$(find apk-check -name "*.apk" | head -1)
         
-        echo "Running basic security checks..."
+        echo "🔒 Running basic security checks..."
         
         # Check for dangerous permissions
         if which aapt > /dev/null 2>&1; then
-          PERMISSIONS=$(aapt d permissions "$APK_FILE" 2>/dev/null || true)
-          
-          DANGEROUS_PERMS=(
-            "android.permission.INTERNET"
-            "android.permission.ACCESS_NETWORK_STATE"
-            "android.permission.FOREGROUND_SERVICE"
-            "android.permission.POST_NOTIFICATIONS"
-            "android.permission.VIBRATE"
-          )
-          
-          for perm in "${DANGEROUS_PERMS[@]}"; do
-            if echo "$PERMISSIONS" | grep -q "$perm"; then
-              echo "⚠ Found permission: $perm"
-            fi
-          done
+          echo "📋 APK Permissions:"
+          aapt d permissions "$APK_FILE" 2>/dev/null || echo "⚠️ Could not extract permissions"
+        else
+          echo "ℹ️ aapt not found, skipping permission check"
         fi
 
   notification:
@@ -355,22 +404,52 @@ jobs:
           const repo = '${{ github.repository }}';
           const runId = '${{ github.run_id }}';
           const commitMsg = '${{ github.event.head_commit.message }}' || 'Manual trigger';
+          const ref = '${{ github.ref }}';
+          const tag = ref.startsWith('refs/tags/') ? ref.replace('refs/tags/', '') : null;
           
           let message = `🚀 *${workflow}* - Build ${jobStatus}\n`;
           message += `📦 Repository: ${repo}\n`;
           message += `🔗 Run: https://github.com/${repo}/actions/runs/${runId}\n`;
+          
+          if (tag) {
+            message += `🏷️ Tag: ${tag}\n`;
+          }
+          
           message += `📝 Commit: ${commitMsg.substring(0, 100)}...\n`;
           
           if (jobStatus === 'success') {
             message += `✅ *Build Successful!*\n`;
-            message += `APK artifacts are available in the workflow run.`;
+            message += `📱 APK artifacts are available in the workflow run.\n`;
+            message += `⬇️ Download from the Artifacts section.`;
           } else if (jobStatus === 'failure') {
             message += `❌ *Build Failed!*\n`;
-            message += `Check the workflow logs for details.`;
+            message += `🔍 Check the workflow logs for details.\n`;
+            message += `📋 Error details in the logs above.`;
           } else {
-            message += `⚠️ *Build ${jobStatus}*\n`;
+            message += `⚠️ *Build ${jobStatus.toUpperCase()}*\n`;
+            message += `ℹ️ Check the workflow for details.`;
           }
           
-          // You can add webhook notifications here if needed
-          // For example, Discord, Slack, Telegram, etc.
+          // Log message (you can add webhook notifications here)
+          console.log('=== BUILD NOTIFICATION ===');
           console.log(message);
+          console.log('==========================');
+          
+          // For webhook integration (uncomment and configure as needed):
+          /*
+          // Example for Discord webhook
+          const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+          if (webhookUrl) {
+            const payload = {
+              content: message,
+              username: 'GitHub Actions',
+              avatar_url: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png'
+            };
+            
+            await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+          }
+          */
