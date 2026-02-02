@@ -1,34 +1,31 @@
 [app]
 
 # معلومات التطبيق
-title = Freebasics DDOS
+title = Turbo DDOS
 package.name = ddos
 package.domain = com.alrufaaey
 
 # مسار المصادر
 source.dir = ./src
-source.include_exts = py,png,jpg,kv,txt,ttf,json
+source.include_exts = py,png,jpg,kv,txt,ttf
 
-# إصدار التطبيق (يتم تحديثه تلقائياً من Git tags)
-version.regex = __version__ = ['"]([^'"]*)['"]
-version.filename = %(source.dir)s/main.py
+# إصدار التطبيق
+version = 1.0
 
 # المتطلبات
 requirements = 
-    python3==3.9.15,
+    python3,
     kivy==2.1.0,
-    https://github.com/kivymd/KivyMD/archive/master.zip,
+    kivymd==1.1.1,
     pyjnius==1.4.2,
     openssl,
-    requests==2.28.2,
-    pillow==9.5.0
+    requests
 
 # واجهة المستخدم
 presplash.filename = ./assets/presplash.png
 icon.filename = ./assets/ico.png
 orientation = portrait
 fullscreen = 0
-log_level = 2
 
 # إعدادات Android
 [android]
@@ -37,52 +34,30 @@ log_level = 2
 android.permissions = 
     INTERNET,
     ACCESS_NETWORK_STATE,
-    ACCESS_WIFI_STATE,
     FOREGROUND_SERVICE,
     POST_NOTIFICATIONS,
-    VIBRATE,
-    WAKE_LOCK
+    VIBRATE
 
 # إصدارات API
 android.api = 31
 android.minapi = 21
 android.sdk = 24
-android.ndk = 25.2.9519653
+android.ndk = 23b
 android.ndk_api = 21
 
-# هندسة المعالج (يتم تعيينه في CI)
-android.arch = arm64-v8a
+# اسم الحزمة
+android.package = com.alrufaaey.ddos
 
-# إعدادات التطبيق
+# إعدادات التنفيذ
 android.private_storage = True
 android.wakelock = True
-android.allow_backup = True
 android.accept_sdk_license = True
 
-# تكوين التوقيع (debug)
-android.release_artifact = .apk
-android.ant_verbose = False
-android.ant_target = debug
-
-# تحسينات الأداء
-android.add_src = %(source.dir)s
-android.add_resources = %(source.dir)s
-
-# مسارات SDK (يتم تعيينها في CI)
-android.sdk = $ANDROID_HOME
-android.ndk_path = $ANDROID_NDK_HOME
+# إعدادات الترجمة
+android.arch = arm64-v8a
 
 [buildozer]
 
-# إعدادات Buildozer
+# مستوى السجلات
 log_level = 2
 warn_on_root = 1
-
-# التخزين المؤقت للاعتمادات
-buildozer.sources_dir = .buildozer/sources
-buildozer.bin_dir = .buildozer/bin
-buildozer.global_buildozer_dir = .buildozer
-
-# إعدادات Cython
-cythonize = 1
-cython.verbose = 0
