@@ -1,0 +1,375 @@
+name: Build Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual triggering
+
+env:
+  # إعدادات إصدار Android SDK
+  ANDROID_COMPILE_SDK: "34"
+  ANDROID_BUILD_TOOLS: "34.0.0"
+  ANDROID_SDK_TOOLS: "9477386"
+  ANDROID_PLATFORM: "android-34"
+  
+  # إصدارات Python و Buildozer
+  PYTHON_VERSION: "3.9"
+  BUILDOZER_VERSION: "1.5.0"
+  
+  # إعدادات App
+  APP_NAME: "Turbo DDOS"
+  PACKAGE_NAME: "com.alrufaaey.ddos"
+  VERSION_CODE: 1
+  VERSION_NAME: "1.0.0"
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.9]
+        include:
+          - arch: armeabi-v7a
+            api: 21
+            abi: armeabi-v7a
+          - arch: arm64-v8a
+            api: 21
+            abi: arm64-v8a
+          - arch: x86
+            api: 21
+            abi: x86
+          - arch: x86_64
+            api: 21
+            abi: x86_64
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          zip \
+          unzip \
+          curl \
+          wget \
+          python3-dev \
+          python3-pip \
+          python3-setuptools \
+          openjdk-11-jdk \
+          zlib1g-dev \
+          libncurses5-dev \
+          libgdbm-dev \
+          libnss3-dev \
+          libssl-dev \
+          libreadline-dev \
+          libffi-dev \
+          libsqlite3-dev \
+          libbz2-dev \
+          pkg-config \
+          autoconf \
+          automake \
+          libtool \
+          cmake \
+          ninja-build \
+          ccache \
+          swig \
+          patchelf
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade setuptools wheel
+        pip install buildozer==${{ env.BUILDOZER_VERSION }}
+        pip install cython==0.29.33
+
+    - name: Set up Android SDK
+      run: |
+        mkdir -p ~/.android
+        touch ~/.android/repositories.cfg
+        
+        # Download and install Android Command Line Tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS}_latest.zip -O cmdline-tools.zip
+        mkdir -p ~/android-sdk/cmdline-tools
+        unzip -q cmdline-tools.zip -d ~/android-sdk/cmdline-tools
+        mv ~/android-sdk/cmdline-tools/cmdline-tools ~/android-sdk/cmdline-tools/latest
+        rm cmdline-tools.zip
+        
+        # Set environment variables
+        echo "ANDROID_HOME=~/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=~/android-sdk" >> $GITHUB_ENV
+        echo "PATH=$PATH:~/android-sdk/cmdline-tools/latest/bin:~/android-sdk/platform-tools" >> $GITHUB_ENV
+
+    - name: Accept Android SDK licenses
+      run: |
+        yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+    - name: Install Android SDK components
+      run: |
+        ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
+        ~/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+          "platform-tools" \
+          "platforms;${{ env.ANDROID_PLATFORM }}" \
+          "build-tools;${{ env.ANDROID_BUILD_TOOLS }}" \
+          "ndk;25.2.9519653" \
+          "cmake;3.22.1" \
+          "patcher;v4"
+
+    - name: Configure Buildozer
+      run: |
+        # Create buildozer.spec if it doesn't exist
+        if [ ! -f buildozer.spec ]; then
+          buildozer init
+        fi
+        
+        # Update buildozer.spec with matrix values
+        sed -i "s/^android.arch = .*/android.arch = ${{ matrix.arch }}/" buildozer.spec
+        sed -i "s/^android.api = .*/android.api = ${{ matrix.api }}/" buildozer.spec
+        sed -i "s/^android.minapi = .*/android.minapi = ${{ matrix.api }}/" buildozer.spec
+        sed -i "s/^title = .*/title = ${{ env.APP_NAME }}/" buildozer.spec
+        sed -i "s/^package.name = .*/package.name = ${{ env.PACKAGE_NAME }}/" buildozer.spec
+        sed -i "s/^package.domain = .*/package.domain = com.alrufaaey/" buildozer.spec
+        sed -i "s/^version.regex = .*/version.regex = __version__ = ['\"]([^'\"]*)['\"]/" buildozer.spec
+        
+        # Configure for debug build
+        sed -i "s/^android.release_artifact = .*/android.release_artifact = .apk/" buildozer.spec
+        
+        # Set proper requirements
+        echo "requirements = python3,kivy==2.1.0,kivymd==1.1.1,pyjnius==1.4.2,openssl,requests==2.28.2,pillow==9.5.0" >> buildozer.spec
+
+    - name: Cache Buildozer dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.buildozer
+          ~/.gradle
+          ~/.android
+          ~/.local/share/virtualenvs
+        key: ${{ runner.os }}-buildozer-${{ matrix.arch }}-${{ hashFiles('buildozer.spec', 'requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-buildozer-${{ matrix.arch }}-
+          ${{ runner.os }}-buildozer-
+
+    - name: Build APK with Buildozer
+      run: |
+        export PATH=$PATH:~/android-sdk/cmdline-tools/latest/bin:~/android-sdk/platform-tools
+        export ANDROID_HOME=~/android-sdk
+        export ANDROID_SDK_ROOT=~/android-sdk
+        
+        # Clean previous builds
+        buildozer android clean || true
+        
+        # Build debug APK
+        buildozer -v android debug
+        
+        # Check if APK was created
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "APK built successfully!"
+          ls -la bin/
+        else
+          echo "APK build failed!"
+          exit 1
+        fi
+
+    - name: Rename APK with architecture info
+      run: |
+        # Find the built APK
+        APK_FILE=$(ls bin/*.apk | head -1)
+        NEW_NAME="${APP_NAME// /_}-v${VERSION_NAME}-${matrix.abi}-debug.apk"
+        
+        mv "$APK_FILE" "bin/$NEW_NAME"
+        echo "APK renamed to: $NEW_NAME"
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}-${{ matrix.abi }}-debug
+        path: bin/*.apk
+        retention-days: 7
+
+  build-universal:
+    runs-on: ubuntu-latest
+    needs: build-android
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download all APK artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create universal APK (Android App Bundle simulation)
+      run: |
+        mkdir -p universal
+        UNIVERSAL_DIR="universal"
+        
+        # Copy all APKs to universal directory
+        find artifacts -name "*.apk" -exec cp {} $UNIVERSAL_DIR/ \;
+        
+        # Create README with build info
+        cat > $UNIVERSAL_DIR/README.md << EOF
+        # ${{ env.APP_NAME }} - Universal APKs
+        
+        ## Build Information
+        - **App Name:** ${{ env.APP_NAME }}
+        - **Version:** ${{ env.VERSION_NAME }}
+        - **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        - **Commit:** ${{ github.sha }}
+        - **Run ID:** ${{ github.run_id }}
+        
+        ## Available Architectures:
+        
+        EOF
+        
+        # List all APKs in README
+        for apk in $UNIVERSAL_DIR/*.apk; do
+          echo "- $(basename "$apk")" >> $UNIVERSAL_DIR/README.md
+        done
+        
+        # Create a zip with all APKs
+        cd $UNIVERSAL_DIR
+        zip -r ../${{ env.APP_NAME// /_ }}-v${{ env.VERSION_NAME }}-all-architectures.zip .
+        cd ..
+
+    - name: Upload universal package
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}-Universal-All-Archs
+        path: |
+          ${{ env.APP_NAME// /_ }}-v${{ env.VERSION_NAME }}-all-architectures.zip
+          universal/
+        retention-days: 30
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build-universal
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download universal artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}-Universal-All-Archs
+        path: release-artifacts
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          release-artifacts/${{ env.APP_NAME// /_ }}-v${{ env.VERSION_NAME }}-all-architectures.zip
+          release-artifacts/*.apk
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+
+  quality-check:
+    runs-on: ubuntu-latest
+    needs: build-android
+    
+    steps:
+    - name: Download APK artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}-arm64-v8a-debug
+        path: apk-check
+
+    - name: APK Structure Check
+      run: |
+        APK_FILE=$(find apk-check -name "*.apk" | head -1)
+        
+        if [ -f "$APK_FILE" ]; then
+          echo "APK file found: $(basename "$APK_FILE")"
+          echo "File size: $(du -h "$APK_FILE" | cut -f1)"
+          
+          # Check APK structure (basic)
+          if unzip -l "$APK_FILE" | grep -q "AndroidManifest.xml"; then
+            echo "✓ AndroidManifest.xml found"
+          else
+            echo "✗ AndroidManifest.xml missing"
+            exit 1
+          fi
+          
+          if unzip -l "$APK_FILE" | grep -q "classes.dex"; then
+            echo "✓ classes.dex found"
+          else
+            echo "✗ classes.dex missing"
+            exit 1
+          fi
+          
+          echo "APK structure check passed!"
+        else
+          echo "APK file not found!"
+          exit 1
+        fi
+
+    - name: Security Scan (Basic)
+      run: |
+        APK_FILE=$(find apk-check -name "*.apk" | head -1)
+        
+        echo "Running basic security checks..."
+        
+        # Check for dangerous permissions
+        if which aapt > /dev/null 2>&1; then
+          PERMISSIONS=$(aapt d permissions "$APK_FILE" 2>/dev/null || true)
+          
+          DANGEROUS_PERMS=(
+            "android.permission.INTERNET"
+            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.FOREGROUND_SERVICE"
+            "android.permission.POST_NOTIFICATIONS"
+            "android.permission.VIBRATE"
+          )
+          
+          for perm in "${DANGEROUS_PERMS[@]}"; do
+            if echo "$PERMISSIONS" | grep -q "$perm"; then
+              echo "⚠ Found permission: $perm"
+            fi
+          done
+        fi
+
+  notification:
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Build Status Notification
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const jobStatus = '${{ job.status }}';
+          const workflow = '${{ github.workflow }}';
+          const repo = '${{ github.repository }}';
+          const runId = '${{ github.run_id }}';
+          const commitMsg = '${{ github.event.head_commit.message }}' || 'Manual trigger';
+          
+          let message = `🚀 *${workflow}* - Build ${jobStatus}\n`;
+          message += `📦 Repository: ${repo}\n`;
+          message += `🔗 Run: https://github.com/${repo}/actions/runs/${runId}\n`;
+          message += `📝 Commit: ${commitMsg.substring(0, 100)}...\n`;
+          
+          if (jobStatus === 'success') {
+            message += `✅ *Build Successful!*\n`;
+            message += `APK artifacts are available in the workflow run.`;
+          } else if (jobStatus === 'failure') {
+            message += `❌ *Build Failed!*\n`;
+            message += `Check the workflow logs for details.`;
+          } else {
+            message += `⚠️ *Build ${jobStatus}*\n`;
+          }
+          
+          // You can add webhook notifications here if needed
+          // For example, Discord, Slack, Telegram, etc.
+          console.log(message);
