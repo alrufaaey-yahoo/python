@@ -21,6 +21,7 @@ env:
   
   # إعدادات App
   APP_NAME: "Turbo DDOS"
+  APP_NAME_NO_SPACES: "Turbo_DDOS"  # اسم بدون مسافات للاستخدام في أسماء الملفات
   PACKAGE_NAME: "com.alrufaaey.ddos"
   VERSION_CODE: 1
   VERSION_NAME: "1.0.0"
@@ -109,18 +110,18 @@ jobs:
         rm cmdline-tools.zip
         
         # Set environment variables
-        echo "ANDROID_HOME=~/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=~/android-sdk" >> $GITHUB_ENV
-        echo "PATH=$PATH:~/android-sdk/cmdline-tools/latest/bin:~/android-sdk/platform-tools" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools" >> $GITHUB_ENV
 
     - name: Accept Android SDK licenses
       run: |
-        yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
     - name: Install Android SDK components
       run: |
-        ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
-        ~/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
+        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
           "platform-tools" \
           "platforms;${{ env.ANDROID_PLATFORM }}" \
           "build-tools;${{ env.ANDROID_BUILD_TOOLS }}" \
@@ -165,9 +166,9 @@ jobs:
 
     - name: Build APK with Buildozer
       run: |
-        export PATH=$PATH:~/android-sdk/cmdline-tools/latest/bin:~/android-sdk/platform-tools
-        export ANDROID_HOME=~/android-sdk
-        export ANDROID_SDK_ROOT=~/android-sdk
+        export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools
+        export ANDROID_HOME=$HOME/android-sdk
+        export ANDROID_SDK_ROOT=$HOME/android-sdk
         
         # Clean previous builds
         buildozer android clean || true
@@ -188,7 +189,7 @@ jobs:
       run: |
         # Find the built APK
         APK_FILE=$(ls bin/*.apk | head -1)
-        NEW_NAME="${APP_NAME// /_}-v${VERSION_NAME}-${matrix.abi}-debug.apk"
+        NEW_NAME="${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-${{ matrix.abi }}-debug.apk"
         
         mv "$APK_FILE" "bin/$NEW_NAME"
         echo "APK renamed to: $NEW_NAME"
@@ -241,7 +242,7 @@ jobs:
         
         # Create a zip with all APKs
         cd $UNIVERSAL_DIR
-        zip -r ../${{ env.APP_NAME// /_ }}-v${{ env.VERSION_NAME }}-all-architectures.zip .
+        zip -r ../${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-architectures.zip .
         cd ..
 
     - name: Upload universal package
@@ -249,7 +250,7 @@ jobs:
       with:
         name: ${{ env.APP_NAME }}-Universal-All-Archs
         path: |
-          ${{ env.APP_NAME// /_ }}-v${{ env.VERSION_NAME }}-all-architectures.zip
+          ${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-architectures.zip
           universal/
         retention-days: 30
 
@@ -269,8 +270,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          release-artifacts/${{ env.APP_NAME// /_ }}-v${{ env.VERSION_NAME }}-all-architectures.zip
-          release-artifacts/*.apk
+          release-artifacts/${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-architectures.zip
+          release-artifacts/universal/*.apk
         draft: false
         prerelease: false
         generate_release_notes: true
