@@ -106,7 +106,8 @@ jobs:
             cp buildozer.spec buildozer.spec.original
           fi
           
-          cat > buildozer.spec.tmp << 'EOF'
+          # إنشاء ملف buildozer.spec جديد من الصفر
+          cat > buildozer.spec.tmp << 'TEMPLATE_EOF'
 [app]
 
 title = Turbo DDOS
@@ -131,13 +132,13 @@ log_level = 2
 
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,FOREGROUND_SERVICE,POST_NOTIFICATIONS,VIBRATE,WAKE_LOCK
 
-android.api = $ANDROID_API
-android.minapi = $ANDROID_MINAPI
+android.api = ARCH_PLACEHOLDER_API
+android.minapi = ARCH_PLACEHOLDER_MINAPI
 android.sdk = 24
 android.ndk = 25.2.9519653
 android.ndk_api = 21
 
-android.arch = $ANDROID_ARCH
+android.arch = ARCH_PLACEHOLDER_ARCH
 
 android.private_storage = True
 android.wakelock = True
@@ -149,14 +150,17 @@ android.release_artifact = .apk
 [buildozer]
 log_level = 2
 warn_on_root = 1
-EOF
+TEMPLATE_EOF
           
-          sed -i "s/\$ANDROID_ARCH/${{ matrix.arch }}/g" buildozer.spec.tmp
-          sed -i "s/\$ANDROID_API/${{ matrix.api }}/g" buildozer.spec.tmp
-          sed -i "s/\$ANDROID_MINAPI/${{ matrix.api }}/g" buildozer.spec.tmp
+          # استبدال العناصر النائبة بالقيم الفعلية
+          sed -i "s/ARCH_PLACEHOLDER_ARCH/${{ matrix.arch }}/g" buildozer.spec.tmp
+          sed -i "s/ARCH_PLACEHOLDER_API/${{ matrix.api }}/g" buildozer.spec.tmp
+          sed -i "s/ARCH_PLACEHOLDER_MINAPI/${{ matrix.api }}/g" buildozer.spec.tmp
           
           mv buildozer.spec.tmp buildozer.spec
           echo "Created clean buildozer.spec for ${{ matrix.arch }}"
+          echo "--- First 20 lines of buildozer.spec ---"
+          head -20 buildozer.spec
 
       - name: Cache Buildozer dependencies
         uses: actions/cache@v3
@@ -174,12 +178,23 @@ EOF
           export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools
           export ANDROID_HOME=$HOME/android-sdk
           export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export ANDROID_NDK_HOME=$HOME/android-sdk/ndk/25.2.9519653
+          
+          # تعيين مسار NDK إذا كان موجوداً
+          if [ -d "$HOME/android-sdk/ndk/25.2.9519653" ]; then
+            export ANDROID_NDK_HOME="$HOME/android-sdk/ndk/25.2.9519653"
+          fi
           
           echo "Cleaning previous builds..."
           buildozer android clean 2>&1 | grep -v "WARNING" || true
           
           echo "Starting Buildozer build for ${{ matrix.arch }}..."
+          
+          # تسجيل الإصدارات للتصحيح
+          echo "Buildozer version:"
+          buildozer --version || true
+          
+          echo "Android SDK location: $ANDROID_HOME"
+          echo "Android NDK location: $ANDROID_NDK_HOME"
           
           if buildozer -v android debug 2>&1 | tee build.log; then
             echo "Build completed successfully!"
@@ -232,11 +247,12 @@ EOF
           mkdir -p universal
           find artifacts -name "*.apk" -exec cp {} universal/ \;
           
-          cat > universal/README.md << EOF
+          cat > universal/README.md << 'README_EOF'
           # ${{ env.APP_NAME }} APKs
           Version: ${{ env.VERSION_NAME }}
           Build: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          EOF
+          Commit: ${{ github.sha }}
+          README_EOF
           
           cd universal
           zip -r ../${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-archs.zip .
