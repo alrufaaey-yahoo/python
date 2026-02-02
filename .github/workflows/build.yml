@@ -5,7 +5,7 @@ on:
     tags:
       - 'v*'
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
 
 env:
@@ -13,10 +13,8 @@ env:
   ANDROID_BUILD_TOOLS: "34.0.0"
   ANDROID_SDK_TOOLS: "9477386"
   ANDROID_PLATFORM: "android-34"
-  
   PYTHON_VERSION: "3.9"
   BUILDOZER_VERSION: "1.5.0"
-  
   APP_NAME: "Turbo DDOS"
   APP_NAME_NO_SPACES: "Turbo_DDOS"
   PACKAGE_NAME: "com.alrufaaey.ddos"
@@ -43,253 +41,264 @@ jobs:
             abi: x86_64
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.9"
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y \
-          build-essential git zip unzip curl wget \
-          python3-dev python3-pip python3-setuptools \
-          openjdk-11-jdk \
-          zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev \
-          libssl-dev libreadline-dev libffi-dev libsqlite3-dev \
-          libbz2-dev \
-          pkg-config autoconf automake libtool cmake \
-          ninja-build ccache swig patchelf
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential git zip unzip curl wget \
+            python3-dev python3-pip python3-setuptools \
+            openjdk-11-jdk \
+            zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev \
+            libssl-dev libreadline-dev libffi-dev libsqlite3-dev \
+            libbz2-dev \
+            pkg-config autoconf automake libtool cmake \
+            ninja-build ccache swig patchelf
 
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install buildozer==${{ env.BUILDOZER_VERSION }}
-        pip install cython==0.29.33
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install buildozer==${{ env.BUILDOZER_VERSION }}
+          pip install cython==0.29.33
 
-    - name: Set up Android SDK
-      run: |
-        mkdir -p ~/.android
-        touch ~/.android/repositories.cfg
-        
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS}_latest.zip -O cmdline-tools.zip
-        mkdir -p ~/android-sdk/cmdline-tools
-        unzip -q cmdline-tools.zip -d ~/android-sdk/cmdline-tools
-        mv ~/android-sdk/cmdline-tools/cmdline-tools ~/android-sdk/cmdline-tools/latest
-        rm cmdline-tools.zip
-        
-        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools" >> $GITHUB_ENV
+      - name: Set up Android SDK
+        run: |
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS}_latest.zip -O cmdline-tools.zip
+          mkdir -p ~/android-sdk/cmdline-tools
+          unzip -q cmdline-tools.zip -d ~/android-sdk/cmdline-tools
+          mv ~/android-sdk/cmdline-tools/cmdline-tools ~/android-sdk/cmdline-tools/latest
+          rm cmdline-tools.zip
+          
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools" >> $GITHUB_ENV
 
-    - name: Accept Android SDK licenses
-      run: |
-        mkdir -p $HOME/android-sdk/licenses
-        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $HOME/android-sdk/licenses/android-sdk-license
-        echo "84831b9409646a918e30573bab4c9c91346d8abd" > $HOME/android-sdk/licenses/android-sdk-preview-license
-        yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Accept Android SDK licenses
+        run: |
+          mkdir -p $HOME/android-sdk/licenses
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $HOME/android-sdk/licenses/android-sdk-license
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $HOME/android-sdk/licenses/android-sdk-preview-license
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-    - name: Install Android SDK components
-      run: |
-        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
-        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-          "platform-tools" \
-          "platforms;${{ env.ANDROID_PLATFORM }}" \
-          "build-tools;${{ env.ANDROID_BUILD_TOOLS }}" \
-          "ndk;25.2.9519653" \
-          "cmake;3.22.1"
+      - name: Install Android SDK components
+        run: |
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --update
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;${{ env.ANDROID_PLATFORM }}" \
+            "build-tools;${{ env.ANDROID_BUILD_TOOLS }}" \
+            "ndk;25.2.9519653" \
+            "cmake;3.22.1"
 
-    - name: Create clean buildozer.spec
-      run: |
-        # إنشاء ملف مواصفات نظيف بدون تكرار
-        if [ ! -f buildozer.spec.original ]; then
-          cp buildozer.spec buildozer.spec.original
-        fi
-        
-        # استخدام ملف مؤقت لإنشاء buildozer.spec نظيف
-        cat > buildozer.spec.tmp << 'EOF'
+      - name: Create clean buildozer.spec
+        run: |
+          if [ ! -f buildozer.spec.original ]; then
+            cp buildozer.spec buildozer.spec.original
+          fi
+          
+          cat > buildozer.spec.tmp << 'EOF'
 [app]
 
-# معلومات التطبيق
 title = Turbo DDOS
 package.name = ddos
 package.domain = com.alrufaaey
 
-# مسار المصادر
 source.dir = ./src
 source.include_exts = py,png,jpg,kv,txt,ttf,json
 
-# إصدار التطبيق
 version.regex = __version__ = ['"]([^'"]*)['"]
 version.filename = %(source.dir)s/main.py
 
-# المتطلبات
 requirements = python3,kivy==2.1.0,kivymd==1.1.1,pyjnius==1.4.2,openssl,requests==2.28.2,pillow==9.5.0
 
-# واجهة المستخدم
 presplash.filename = ./assets/presplash.png
 icon.filename = ./assets/ico.png
 orientation = portrait
 fullscreen = 0
 log_level = 2
 
-# إعدادات Android
 [android]
 
-# أذونات النظام
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,FOREGROUND_SERVICE,POST_NOTIFICATIONS,VIBRATE,WAKE_LOCK
 
-# إصدارات API
 android.api = $ANDROID_API
 android.minapi = $ANDROID_MINAPI
 android.sdk = 24
 android.ndk = 25.2.9519653
 android.ndk_api = 21
 
-# هندسة المعالج
 android.arch = $ANDROID_ARCH
 
-# إعدادات التطبيق
 android.private_storage = True
 android.wakelock = True
 android.allow_backup = True
 android.accept_sdk_license = True
 
-# تكوين التوقيع (debug)
 android.release_artifact = .apk
 
 [buildozer]
 log_level = 2
 warn_on_root = 1
 EOF
-        
-        # استبدال المتغيرات بالقيم الحقيقية
-        sed -i "s/\$ANDROID_ARCH/${{ matrix.arch }}/g" buildozer.spec.tmp
-        sed -i "s/\$ANDROID_API/${{ matrix.api }}/g" buildozer.spec.tmp
-        sed -i "s/\$ANDROID_MINAPI/${{ matrix.api }}/g" buildozer.spec.tmp
-        
-        mv buildozer.spec.tmp buildozer.spec
-        echo "✅ Created clean buildozer.spec for ${{ matrix.arch }}"
-        echo "=== buildozer.spec content ==="
-        cat buildozer.spec
+          
+          sed -i "s/\$ANDROID_ARCH/${{ matrix.arch }}/g" buildozer.spec.tmp
+          sed -i "s/\$ANDROID_API/${{ matrix.api }}/g" buildozer.spec.tmp
+          sed -i "s/\$ANDROID_MINAPI/${{ matrix.api }}/g" buildozer.spec.tmp
+          
+          mv buildozer.spec.tmp buildozer.spec
+          echo "Created clean buildozer.spec for ${{ matrix.arch }}"
 
-    - name: Cache Buildozer dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.buildozer
-          ~/.gradle
-          ~/.android
-        key: ${{ runner.os }}-buildozer-${{ matrix.arch }}-${{ hashFiles('buildozer.spec') }}
-        restore-keys: |
-          ${{ runner.os }}-buildozer-${{ matrix.arch }}-
+      - name: Cache Buildozer dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.buildozer
+            ~/.gradle
+            ~/.android
+          key: ${{ runner.os }}-buildozer-${{ matrix.arch }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-${{ matrix.arch }}-
 
-    - name: Build APK with Buildozer
-      run: |
-        export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools
-        export ANDROID_HOME=$HOME/android-sdk
-        export ANDROID_SDK_ROOT=$HOME/android-sdk
-        export ANDROID_NDK_HOME=$HOME/android-sdk/ndk/25.2.9519653
-        
-        # تنظيف البناء السابق
-        echo "🧹 Cleaning previous builds..."
-        buildozer android clean 2>&1 | grep -v "WARNING" || true
-        
-        # بناء APK
-        echo "🚀 Starting Buildozer build for ${{ matrix.arch }}..."
-        
-        # محاولة البناء مع إخراج تفصيلي
-        if buildozer -v android debug 2>&1 | tee build.log; then
-          echo "✅ Build completed successfully!"
-        else
-          BUILD_EXIT_CODE=$?
-          echo "❌ Build failed with exit code: $BUILD_EXIT_CODE"
-          echo "=== Last 50 lines of build.log ==="
-          tail -50 build.log
-          exit $BUILD_EXIT_CODE
-        fi
-        
-        # التحقق من وجود APK
-        if ls bin/*.apk 1> /dev/null 2>&1; then
+      - name: Build APK with Buildozer
+        run: |
+          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export ANDROID_NDK_HOME=$HOME/android-sdk/ndk/25.2.9519653
+          
+          echo "Cleaning previous builds..."
+          buildozer android clean 2>&1 | grep -v "WARNING" || true
+          
+          echo "Starting Buildozer build for ${{ matrix.arch }}..."
+          
+          if buildozer -v android debug 2>&1 | tee build.log; then
+            echo "Build completed successfully!"
+          else
+            BUILD_EXIT_CODE=$?
+            echo "Build failed with exit code: $BUILD_EXIT_CODE"
+            echo "Last 50 lines of build.log:"
+            tail -50 build.log
+            exit $BUILD_EXIT_CODE
+          fi
+          
+          if ls bin/*.apk 1> /dev/null 2>&1; then
+            APK_FILE=$(ls bin/*.apk | head -1)
+            echo "APK built successfully: $(basename "$APK_FILE")"
+            echo "APK size: $(du -h "$APK_FILE" | cut -f1)"
+          else
+            echo "No APK file found in bin/ directory!"
+            ls -la bin/ || true
+            exit 1
+          fi
+
+      - name: Rename APK with architecture info
+        run: |
           APK_FILE=$(ls bin/*.apk | head -1)
-          echo "✅ APK built successfully: $(basename "$APK_FILE")"
-          echo "📊 APK size: $(du -h "$APK_FILE" | cut -f1)"
-        else
-          echo "❌ No APK file found in bin/ directory!"
-          ls -la bin/ || true
-          exit 1
-        fi
+          NEW_NAME="${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-${{ matrix.abi }}-debug.apk"
+          mv "$APK_FILE" "bin/$NEW_NAME"
+          echo "Renamed APK to: $NEW_NAME"
 
-    - name: Rename APK with architecture info
-      run: |
-        APK_FILE=$(ls bin/*.apk | head -1)
-        NEW_NAME="${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-${{ matrix.abi }}-debug.apk"
-        mv "$APK_FILE" "bin/$NEW_NAME"
-        echo "✅ Renamed APK to: $NEW_NAME"
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ matrix.abi }}-debug
+          path: bin/*.apk
+          retention-days: 7
+          if-no-files-found: error
 
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.APP_NAME }}-${{ matrix.abi }}-debug
-        path: bin/*.apk
-        retention-days: 7
-        if-no-files-found: error
-
-  # بقية الوظائف تبقى كما هي (build-universal, release, quality-check, notification)
   build-universal:
     runs-on: ubuntu-latest
     needs: build-android
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     
     steps:
-    - name: Download all APK artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
+      - name: Download all APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-    - name: Create universal package
-      run: |
-        mkdir -p universal
-        find artifacts -name "*.apk" -exec cp {} universal/ \;
-        
-        cat > universal/README.md << EOF
-        # ${{ env.APP_NAME }} APKs
-        Version: ${{ env.VERSION_NAME }}
-        Build: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-        EOF
-        
-        cd universal
-        zip -r ../${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-archs.zip .
-        cd ..
+      - name: Create universal package
+        run: |
+          mkdir -p universal
+          find artifacts -name "*.apk" -exec cp {} universal/ \;
+          
+          cat > universal/README.md << EOF
+          # ${{ env.APP_NAME }} APKs
+          Version: ${{ env.VERSION_NAME }}
+          Build: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          EOF
+          
+          cd universal
+          zip -r ../${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-archs.zip .
+          cd ..
 
-    - name: Upload universal package
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.APP_NAME }}-Universal
-        path: ${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-archs.zip
-        retention-days: 30
+      - name: Upload universal package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-Universal
+          path: ${{ env.APP_NAME_NO_SPACES }}-v${{ env.VERSION_NAME }}-all-archs.zip
+          retention-days: 30
 
   quality-check:
     runs-on: ubuntu-latest
     needs: build-android
     
     steps:
-    - name: Download APK for checking
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ env.APP_NAME }}-arm64-v8a-debug
-        path: apk-check
+      - name: Download APK for checking
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-arm64-v8a-debug
+          path: apk-check
 
-    - name: Basic APK validation
-      run: |
-        APK_FILE=$(find apk-check -name "*.apk" | head -1)
-        if [ -f "$APK_FILE" ]; then
-          echo "✅ APK exists: $(basename "$APK_FILE")"
-          echo "📏 Size: $(du -h "$APK_FILE" | cut -f1)"
-        else
-          echo "❌ No APK found"
-          exit 1
-        fi
+      - name: Basic APK validation
+        run: |
+          APK_FILE=$(find apk-check -name "*.apk" | head -1)
+          if [ -f "$APK_FILE" ]; then
+            echo "APK exists: $(basename "$APK_FILE")"
+            echo "Size: $(du -h "$APK_FILE" | cut -f1)"
+          else
+            echo "No APK found"
+            exit 1
+          fi
+
+  notification:
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Build Status Notification
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const jobStatus = '${{ job.status }}';
+            const workflow = '${{ github.workflow }}';
+            const repo = '${{ github.repository }}';
+            const runId = '${{ github.run_id }}';
+            const commitMsg = '${{ github.event.head_commit.message }}' || 'Manual trigger';
+            
+            let message = `${workflow} - Build ${jobStatus}\n`;
+            message += `Repository: ${repo}\n`;
+            message += `Run: https://github.com/${repo}/actions/runs/${runId}\n`;
+            message += `Commit: ${commitMsg.substring(0, 100)}...\n`;
+            
+            if (jobStatus === 'success') {
+              message += `Build Successful!\n`;
+              message += `APK artifacts are available in the workflow run.`;
+            } else if (jobStatus === 'failure') {
+              message += `Build Failed!\n`;
+              message += `Check the workflow logs for details.`;
+            } else {
+              message += `Build ${jobStatus}\n`;
+            }
+            
+            console.log(message);
